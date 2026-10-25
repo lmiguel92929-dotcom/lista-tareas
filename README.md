@@ -21,6 +21,7 @@ El proyecto es el resultado del desarrollo colaborativo entre desarrolladores co
 - **Modo Oscuro Integrado:** Detección automática de la preferencia del sistema (`prefers-color-scheme: dark`) para mayor confort visual.
 - **Contador Dinámico de Tareas:** Indicador visual estilizado con estado en tiempo real.
 - **Estados de Componentes Visuales:** Tratamiento específico para tareas activas, tareas completadas (`.completed`), estados hover, active y mensajes de validación.
+- **Respaldo y Transferencia de Datos:** Exportación e importación segura de tareas en formato JSON con validación aditiva y prevención de conflictos.
 
 ---
 
@@ -87,6 +88,10 @@ El proyecto se rige por un contrato estricto de selectores e identificadores com
 | `#task-list` | `<ul>` | Lista renderizada de tareas |
 | `#task-count` | `<p>` | Contador numérico de tareas |
 | `#status-message` | `<p>` | Canal de anuncios y validación de estado |
+| `#task-transfer` | `<section>` | Contenedor de las acciones de transferencia y respaldo |
+| `#export-btn` | `<button>` | Disparador para exportar y descargar respaldo JSON |
+| `#import-btn` | `<button>` | Disparador para abrir selector de archivo de respaldo |
+| `#import-file-input` | `<input type="file">` | Campo de archivo oculto/accesible para carga del JSON |
 
 Para proponer modificaciones sobre este contrato, consultá la [Guía de Contribución](docs/contributing.md).
 
