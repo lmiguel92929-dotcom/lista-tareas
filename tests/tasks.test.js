@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const { createTask } = require('../js/tasks.js');
 const { initTaskApp } = require('../js/tasks.js');
 const { loadTasks, saveTasks } = require('../js/storage.js');
+const { exportTasks, importTasks } = require('../js/storage.js');
 
 test('crea una tarea pendiente y recorta espacios exteriores', () => {
   const task = createTask('  Comprar pan  ');
@@ -79,7 +80,7 @@ function app(storage) {
       dispatch(type) { this.listeners[type]({ preventDefault() {} }); },
     };
   }
-  const nodes = Object.fromEntries(['task-form', 'task-input', 'task-list', 'task-count', 'status-message']
+  const nodes = Object.fromEntries(['task-form', 'task-input', 'task-list', 'task-count', 'status-message', 'export-btn', 'import-btn', 'import-file-input']
     .map(id => [id, element()]));
   nodes['task-form'].reset = () => { nodes['task-input'].value = ''; };
   initTaskApp({ querySelector: selector => nodes[selector.slice(1)], createElement: element }, storage);
@@ -181,4 +182,110 @@ test('una entrada válida deja de anunciarse inválida aunque falle el guardado'
   assert.equal(nodes['task-input'].attributes['aria-invalid'], undefined);
   assert.equal(nodes['task-input'].value, 'Válida');
   assert.match(nodes['status-message'].textContent, /No se pudo guardar/);
+});
+
+test('exportar e importar conserva texto Unicode, identificadores y estado', () => {
+  const source = memoryStorage();
+  const tasks = [createTask('Comprar café ☕'), { ...createTask('<b>Leer</b>'), completed: true }];
+  saveTasks(tasks, source);
+  const json = exportTasks(source);
+  assert.equal(JSON.parse(json).version, 1);
+  const destination = memoryStorage();
+  assert.deepEqual(importTasks(json, destination), { tasks, added: 2, skipped: 0 });
+  assert.deepEqual(loadTasks(destination), tasks);
+  assert.deepEqual(importTasks('\uFEFF' + json, destination), { tasks, added: 0, skipped: 2 });
+});
+
+test('importar agrega sin eliminar tareas existentes y exporta una lista vacía', () => {
+  const destination = memoryStorage();
+  const existing = createTask('Local');
+  saveTasks([existing], destination);
+  assert.equal(importTasks(exportTasks(memoryStorage()), destination).added, 0);
+  assert.deepEqual(loadTasks(destination), [existing]);
+  const source = memoryStorage();
+  const incoming = createTask('Importada');
+  saveTasks([incoming], source);
+  assert.deepEqual(importTasks(exportTasks(source), destination).tasks, [existing, incoming]);
+});
+
+test('rechaza respaldos inválidos sin alterar los datos locales', () => {
+  const local = createTask('Local');
+  const incoming = createTask('Importada');
+  const wrap = tasks => JSON.stringify({ format: 'mini-task', version: 1, tasks });
+  for (const json of ['{', 'null', '{}', '[]', JSON.stringify({ format: 'mini-task', version: 2, tasks: [] }),
+    wrap([incoming, incoming]), wrap([{ ...incoming, completed: 'true' }]), wrap([incoming, { ...local, text: 'Conflicto' }])]) {
+    const destination = memoryStorage();
+    saveTasks([local], destination);
+    const before = destination.getItem('mini-task.tasks');
+    assert.throws(() => importTasks(json, destination));
+    assert.equal(destination.getItem('mini-task.tasks'), before);
+  }
+});
+
+test('rechaza archivos grandes midiendo bytes UTF-8 y entradas no textuales', () => {
+  assert.throws(() => importTasks('é'.repeat(524289), memoryStorage()), /1 MiB/);
+  assert.throws(() => importTasks(null, memoryStorage()), /archivo JSON/);
+});
+
+test('exportar e importar no sobrescribe almacenamiento local corrupto', () => {
+  const destination = memoryStorage();
+  destination.setItem('mini-task.tasks', '{');
+  assert.throws(() => exportTasks(destination));
+  assert.throws(() => importTasks(exportTasks(memoryStorage()), destination));
+  assert.equal(destination.getItem('mini-task.tasks'), '{');
+});
+
+test('un fallo de escritura durante la importación se propaga sin anunciar éxito', () => {
+  const source = memoryStorage();
+  saveTasks([createTask('Importar')], source);
+  const destination = { getItem: () => null, setItem() { throw new Error('Sin espacio'); } };
+  assert.throws(() => importTasks(exportTasks(source), destination), /Sin espacio/);
+});
+
+test('interfaz exporta e importa tareas actualizando lista y estado', async () => {
+  const memory = memoryStorage();
+  const storage = {
+    loadTasks: () => loadTasks(memory),
+    saveTasks: tasks => saveTasks(tasks, memory),
+    exportTasks: () => exportTasks(memory),
+    importTasks: text => importTasks(text, memory),
+  };
+  const { nodes, submit } = app(storage);
+  submit('Tarea 1');
+  assert.equal(nodes['task-list'].children.length, 1);
+
+  // Comprobar exportación
+  let exportedData;
+  const originalCreateObjectURL = globalThis.URL?.createObjectURL;
+  const originalRevokeObjectURL = globalThis.URL?.revokeObjectURL;
+  if (!globalThis.URL) globalThis.URL = {};
+  globalThis.URL.createObjectURL = (blob) => {
+    exportedData = blob;
+    return 'blob:mock-url';
+  };
+  globalThis.URL.revokeObjectURL = () => {};
+
+  nodes['export-btn'].dispatch('click');
+
+  if (originalCreateObjectURL) globalThis.URL.createObjectURL = originalCreateObjectURL;
+  if (originalRevokeObjectURL) globalThis.URL.revokeObjectURL = originalRevokeObjectURL;
+
+  assert.match(nodes['status-message'].textContent, /Respaldo exportado exitosamente/);
+  assert.equal(exportedData instanceof Blob, true);
+
+  // Comprobar importación
+  let opened = false;
+  nodes['import-file-input'].click = () => { opened = true; };
+  nodes['import-btn'].dispatch('click');
+  assert.equal(opened, true);
+
+  const backupJson = JSON.stringify({
+    format: 'mini-task',
+    version: 1,
+    tasks: [{ id: '99999999-9999-9999-9999-999999999999', text: 'Importada', completed: false }]
+  });
+  nodes['import-file-input'].files = [{ text: async () => backupJson }];
+  await nodes['import-file-input'].listeners['change']();
+  assert.match(nodes['status-message'].textContent, /Se importaron 1 tarea nueva/);
+  assert.equal(nodes['task-list'].children.length, 2);
 });

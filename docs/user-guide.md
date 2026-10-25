@@ -14,6 +14,7 @@ Bienvenido a la guía de usuario de **Mini Task**. Esta aplicación te permite o
 6. [Navegación por Teclado y Accesibilidad](#navegación-por-teclado-y-accesibilidad)
 7. [Modo Oscuro Automático](#modo-oscuro-automático)
 8. [Uso en Dispositivos Móviles](#uso-en-dispositivos-móviles)
+9. [Exportar e Importar Tareas (Copia de Respaldo)](#exportar-e-importar-tareas-copia-de-respaldo)
 
 ---
 
@@ -83,3 +84,23 @@ La interfaz detecta automáticamente las preferencias de tu sistema operativo (`
 Mini Task cuenta con un diseño fluido y Mobile-First:
 - El formulario se reorganiza verticalmente en pantallas estrechas.
 - Los botones y campos de entrada cuentan con áreas de toque amplias (mínimo 44px de altura) para facilitar la interacción táctil con una sola mano.
+
+---
+
+## 9. Exportar e Importar Tareas (Copia de Respaldo)
+
+Mini Task permite crear copias de seguridad de tus tareas en formato JSON y transferirlas entre navegadores o dispositivos sin perder información.
+
+### 9.1. Exportar tareas
+1. En la sección **"Respaldo y transferencia"**, hacé clic en el botón **"Exportar tareas"** (`#export-btn`).
+2. Se generará un archivo descargable con tus tareas en formato estructurado JSON (`format: "mini-task", version: 1`).
+3. Guardá el archivo en tu computadora o dispositivo para resguardar tus datos.
+
+### 9.2. Importar tareas
+1. Hacé clic en el botón **"Importar tareas"** (`#import-btn`).
+2. Seleccioná tu archivo `.json` de respaldo previamente exportado (máximo 1 MiB).
+3. Mini Task procesará el archivo de forma aditiva:
+   - Las tareas nuevas que no existan se sumarán automáticamente a tu lista.
+   - Si una tarea ya existe idéntica (mismo ID, texto y estado), se conservará sin duplicarse.
+   - **Prevención de conflictos:** Si una tarea entrante comparte el mismo ID pero tiene diferente texto o estado, el sistema detendrá la importación y te alertará en pantalla para evitar pérdida o sobrescritura accidental de datos.
+4. El contador (`#task-count`) y la lista se actualizarán inmediatamente reflejando las tareas incorporadas.

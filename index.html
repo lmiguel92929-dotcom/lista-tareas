@@ -27,6 +27,14 @@
         <p id="task-count" class="task-count" aria-live="polite">0 tareas</p>
         <ul id="task-list" class="task-list"></ul>
       </section>
+      <section id="task-transfer" class="task-transfer" aria-labelledby="transfer-title">
+        <h2 id="transfer-title" class="transfer-title">Respaldo y transferencia</h2>
+        <div class="transfer-actions">
+          <button type="button" id="export-btn" class="button button-secondary">Exportar tareas</button>
+          <button type="button" id="import-btn" class="button button-secondary">Importar tareas</button>
+          <input type="file" id="import-file-input" class="visually-hidden" accept="application/json,.json" aria-label="Seleccionar archivo JSON para importar tareas">
+        </div>
+      </section>
     </main>
   </body>
 </html>
