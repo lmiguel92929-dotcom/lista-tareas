@@ -55,7 +55,8 @@ En la sección **"Mis tareas"**:
 
 Cuando una tarea se marca como realizada:
 - El texto de la tarea se muestra tachado y con una opacidad reducida (`.completed`).
-- La tarjeta de la tarea adquiere un fondo atenuado para que puedas enfocar tu atención en los pendientes.
+- La tarjeta de la tarea adquiere un fondo atenuado y emite un pulso visual sutil para que confirmes el cambio de estado de manera intuitiva.
+- Podés interactuar mediante controles accesibles (`.btn-toggle` o casilla de verificación) compatibles con navegación secuencial por teclado.
 
 ---
 
