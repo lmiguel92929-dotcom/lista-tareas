@@ -71,16 +71,18 @@ function app(storage) {
   function element() {
     return {
       children: [], attributes: {}, dataset: {}, listeners: {}, value: '',
+      files: [],
       append(...nodes) { nodes.forEach(node => { node.parent = this; this.children.push(node); }); },
+      replaceChildren() { this.children = []; },
       remove() { this.parent.children = this.parent.children.filter(node => node !== this); },
       setAttribute(key, value) { this.attributes[key] = value; },
       removeAttribute(key) { delete this.attributes[key]; },
       addEventListener(type, callback) { this.listeners[type] = callback; },
       focus() { this.focused = true; },
-      dispatch(type) { this.listeners[type]({ preventDefault() {} }); },
+      dispatch(type) { return this.listeners[type]({ preventDefault() {} }); },
     };
   }
-  const nodes = Object.fromEntries(['task-form', 'task-input', 'task-list', 'task-count', 'status-message']
+  const nodes = Object.fromEntries(['task-form', 'task-input', 'task-list', 'task-count', 'status-message', 'export-btn', 'import-btn', 'import-file-input']
     .map(id => [id, element()]));
   nodes['task-form'].reset = () => { nodes['task-input'].value = ''; };
   initTaskApp({ querySelector: selector => nodes[selector.slice(1)], createElement: element }, storage);
@@ -240,4 +242,52 @@ test('un fallo de escritura durante la importación se propaga sin anunciar éxi
   saveTasks([createTask('Importar')], source);
   const destination = { getItem: () => null, setItem() { throw new Error('Sin espacio'); } };
   assert.throws(() => importTasks(exportTasks(source), destination), /Sin espacio/);
+});
+
+test('la interfaz importa, actualiza el contador y permite repetir el mismo archivo', async () => {
+  const memory = memoryStorage();
+  const source = memoryStorage();
+  saveTasks([createTask('Importada')], source);
+  const json = exportTasks(source);
+  const { nodes } = app({ loadTasks: () => loadTasks(memory), importTasks: text => importTasks(text, memory) });
+  const file = nodes['import-file-input'];
+  file.files = [{ size: json.length, text: async () => json }];
+  await file.dispatch('change');
+  assert.equal(nodes['task-list'].children.length, 1);
+  assert.match(nodes['task-count'].textContent, /1 tarea/);
+  assert.match(nodes['status-message'].textContent, /1 tareas nuevas/);
+  assert.equal(file.value, '');
+  assert.equal(nodes['import-btn'].focused, true);
+  await file.dispatch('change');
+  assert.equal(nodes['task-list'].children.length, 1);
+  assert.match(nodes['status-message'].textContent, /1 duplicadas omitidas/);
+});
+
+test('la interfaz rechaza archivos grandes antes de leerlos y restaura controles', async () => {
+  const { nodes } = app({ loadTasks: () => [] });
+  nodes['import-file-input'].files = [{ size: 1024 * 1024 + 1, text() { assert.fail('No debe leer'); } }];
+  await nodes['import-file-input'].dispatch('change');
+  assert.match(nodes['status-message'].textContent, /supera el límite/);
+  assert.equal(nodes['import-btn'].disabled, false);
+  assert.equal(nodes['export-btn'].disabled, false);
+  assert.equal(nodes['import-file-input'].disabled, false);
+});
+
+test('un archivo ilegible no cambia la lista y una segunda importación no se solapa', async () => {
+  const { nodes } = app({ loadTasks: () => [createTask('Existente')] });
+  let rejectRead;
+  let reads = 0;
+  nodes['import-file-input'].files = [{ size: 1, text() {
+    reads++;
+    return new Promise((resolve, reject) => { rejectRead = reject; });
+  } }];
+  const first = nodes['import-file-input'].dispatch('change');
+  assert.equal(nodes['import-btn'].disabled, true);
+  await nodes['import-file-input'].dispatch('change');
+  assert.equal(reads, 1);
+  rejectRead(new Error('Archivo ilegible'));
+  await first;
+  assert.equal(nodes['task-list'].children.length, 1);
+  assert.match(nodes['status-message'].textContent, /Archivo ilegible/);
+  assert.equal(nodes['import-btn'].disabled, false);
 });
