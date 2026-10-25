@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mini Task</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="js/tasks.js" defer></script>
+  </head>
+  <body class="app">
+    <main class="task-app" aria-labelledby="app-title">
+      <header class="app-header">
+        <h1 id="app-title" class="app-title">Mini Task</h1>
+        <p class="app-description">Organizá tus tareas del día.</p>
+      </header>
+      <form id="task-form" class="task-form" novalidate>
+        <label for="task-input" class="task-label">Nueva tarea</label>
+        <div class="task-input-group">
+          <input id="task-input" class="task-input" name="task" type="text" required aria-describedby="status-message" autocomplete="off">
+          <button type="submit" class="button button-primary">Agregar tarea</button>
+        </div>
+      </form>
+      <p id="status-message" class="status-message" role="status" aria-live="polite" aria-atomic="true"></p>
+      <section class="task-section" aria-labelledby="tasks-title">
+        <h2 id="tasks-title" class="section-title">Mis tareas</h2>
+        <p id="task-count" class="task-count" aria-live="polite">0 tareas</p>
+        <ul id="task-list" class="task-list"></ul>
+      </section>
+    </main>
+  </body>
+</html>
