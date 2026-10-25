@@ -80,7 +80,7 @@ function app(storage) {
       dispatch(type) { this.listeners[type]({ preventDefault() {} }); },
     };
   }
-  const nodes = Object.fromEntries(['task-form', 'task-input', 'task-list', 'task-count', 'status-message']
+  const nodes = Object.fromEntries(['task-form', 'task-input', 'task-list', 'task-count', 'status-message', 'export-btn', 'import-btn', 'import-file-input']
     .map(id => [id, element()]));
   nodes['task-form'].reset = () => { nodes['task-input'].value = ''; };
   initTaskApp({ querySelector: selector => nodes[selector.slice(1)], createElement: element }, storage);
@@ -240,4 +240,52 @@ test('un fallo de escritura durante la importación se propaga sin anunciar éxi
   saveTasks([createTask('Importar')], source);
   const destination = { getItem: () => null, setItem() { throw new Error('Sin espacio'); } };
   assert.throws(() => importTasks(exportTasks(source), destination), /Sin espacio/);
+});
+
+test('interfaz exporta e importa tareas actualizando lista y estado', async () => {
+  const memory = memoryStorage();
+  const storage = {
+    loadTasks: () => loadTasks(memory),
+    saveTasks: tasks => saveTasks(tasks, memory),
+    exportTasks: () => exportTasks(memory),
+    importTasks: text => importTasks(text, memory),
+  };
+  const { nodes, submit } = app(storage);
+  submit('Tarea 1');
+  assert.equal(nodes['task-list'].children.length, 1);
+
+  // Comprobar exportación
+  let exportedData;
+  const originalCreateObjectURL = globalThis.URL?.createObjectURL;
+  const originalRevokeObjectURL = globalThis.URL?.revokeObjectURL;
+  if (!globalThis.URL) globalThis.URL = {};
+  globalThis.URL.createObjectURL = (blob) => {
+    exportedData = blob;
+    return 'blob:mock-url';
+  };
+  globalThis.URL.revokeObjectURL = () => {};
+
+  nodes['export-btn'].dispatch('click');
+
+  if (originalCreateObjectURL) globalThis.URL.createObjectURL = originalCreateObjectURL;
+  if (originalRevokeObjectURL) globalThis.URL.revokeObjectURL = originalRevokeObjectURL;
+
+  assert.match(nodes['status-message'].textContent, /Respaldo exportado exitosamente/);
+  assert.equal(exportedData instanceof Blob, true);
+
+  // Comprobar importación
+  let opened = false;
+  nodes['import-file-input'].click = () => { opened = true; };
+  nodes['import-btn'].dispatch('click');
+  assert.equal(opened, true);
+
+  const backupJson = JSON.stringify({
+    format: 'mini-task',
+    version: 1,
+    tasks: [{ id: '99999999-9999-9999-9999-999999999999', text: 'Importada', completed: false }]
+  });
+  nodes['import-file-input'].files = [{ text: async () => backupJson }];
+  await nodes['import-file-input'].listeners['change']();
+  assert.match(nodes['status-message'].textContent, /Se importaron 1 tarea nueva/);
+  assert.equal(nodes['task-list'].children.length, 2);
 });

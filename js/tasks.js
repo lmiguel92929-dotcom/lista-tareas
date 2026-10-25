@@ -111,6 +111,67 @@ function initTaskApp(document, storage = typeof module !== 'undefined' && module
     form.reset();
     input.focus();
   });
+
+  const exportBtn = document.querySelector('#export-btn');
+  const importBtn = document.querySelector('#import-btn');
+  const importInput = document.querySelector('#import-file-input');
+
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      try {
+        const json = storage.exportTasks();
+        const date = new Date().toISOString().split('T')[0];
+        const filename = `mini-task-backup-${date}.json`;
+        const blob = new globalThis.Blob([json], { type: 'application/json' });
+        if (globalThis.URL && typeof globalThis.URL.createObjectURL === 'function') {
+          const url = globalThis.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          if (document.body) {
+            document.body.append(a);
+            a.click();
+            a.remove();
+          }
+          globalThis.URL.revokeObjectURL(url);
+        }
+        message('Respaldo exportado exitosamente.');
+      } catch (error) {
+        message(error.message || 'Error al exportar tareas.', true);
+      }
+    });
+  }
+
+  if (importBtn && importInput) {
+    importBtn.addEventListener('click', () => {
+      importInput.click();
+    });
+
+    importInput.addEventListener('change', async () => {
+      const file = importInput.files?.[0];
+      if (!file) return;
+      try {
+        const text = typeof file.text === 'function' ? await file.text() : String(file);
+        const result = storage.importTasks(text);
+        if (typeof list.replaceChildren === 'function') {
+          list.replaceChildren();
+        } else {
+          list.children = [];
+        }
+        tasks = storage.loadTasks();
+        tasks.forEach(appendTask);
+        updateCount();
+        const summary = result.skipped > 0
+          ? `Se importaron ${result.added} ${result.added === 1 ? 'tarea nueva' : 'tareas nuevas'} (${result.skipped} ya estaban al día).`
+          : `Se importaron ${result.added} ${result.added === 1 ? 'tarea nueva' : 'tareas nuevas'}.`;
+        message(summary);
+      } catch (error) {
+        message(error.message || 'Error al importar tareas.', true);
+      } finally {
+        importInput.value = '';
+      }
+    });
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
