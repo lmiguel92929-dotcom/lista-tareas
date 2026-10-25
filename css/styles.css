@@ -292,6 +292,27 @@ button:focus-visible {
   background-color: var(--color-primary-active);
 }
 
+/* Botón Secundario / Contorno (Transferencia e Importación/Exportación) */
+.button-secondary,
+.button-outline {
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.button-secondary:hover,
+.button-outline:hover {
+  background-color: var(--color-surface-hover);
+  border-color: #cbd5e1;
+  color: var(--color-primary);
+}
+
+.button-secondary:active,
+.button-outline:active {
+  background-color: var(--color-border);
+}
+
 /* Botón Peligro / Eliminar */
 .button-danger,
 .button-delete,
@@ -535,7 +556,55 @@ button:focus-visible {
 }
 
 /* --------------------------------------------------------------------------
-   10. Adaptabilidad Responsive (Mobile-First y Media Queries)
+   10. Sección de Transferencia de Tareas (Contrato: #task-transfer)
+   -------------------------------------------------------------------------- */
+#task-transfer,
+.task-transfer {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px dashed var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.transfer-title {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.transfer-actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+#export-btn,
+#import-btn,
+.btn-transfer {
+  flex: 1 1 calc(50% - var(--space-2));
+  min-height: 2.75rem; /* Target táctil accesible mínimo 44px */
+}
+
+/* Utilidad para ocultar elementos visualmente manteniendo accesibilidad */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* --------------------------------------------------------------------------
+   11. Adaptabilidad Responsive (Mobile-First y Media Queries)
    -------------------------------------------------------------------------- */
 @media (max-width: 600px) {
   body {
@@ -563,10 +632,22 @@ button:focus-visible {
   .task-item {
     padding: var(--space-3);
   }
+
+  .transfer-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  #export-btn,
+  #import-btn,
+  .btn-transfer {
+    width: 100%;
+    flex: 1 1 100%;
+  }
 }
 
 /* --------------------------------------------------------------------------
-   11. Accesibilidad: Reducción de Movimiento
+   12. Accesibilidad: Reducción de Movimiento
    -------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   *,
