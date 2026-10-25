@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const { createTask } = require('../js/tasks.js');
 const { initTaskApp } = require('../js/tasks.js');
 const { loadTasks, saveTasks } = require('../js/storage.js');
+const { exportTasks, importTasks } = require('../js/storage.js');
 
 test('crea una tarea pendiente y recorta espacios exteriores', () => {
   const task = createTask('  Comprar pan  ');
@@ -70,16 +71,18 @@ function app(storage) {
   function element() {
     return {
       children: [], attributes: {}, dataset: {}, listeners: {}, value: '',
+      files: [],
       append(...nodes) { nodes.forEach(node => { node.parent = this; this.children.push(node); }); },
+      replaceChildren() { this.children = []; },
       remove() { this.parent.children = this.parent.children.filter(node => node !== this); },
       setAttribute(key, value) { this.attributes[key] = value; },
       removeAttribute(key) { delete this.attributes[key]; },
       addEventListener(type, callback) { this.listeners[type] = callback; },
       focus() { this.focused = true; },
-      dispatch(type) { this.listeners[type]({ preventDefault() {} }); },
+      dispatch(type) { return this.listeners[type]({ preventDefault() {} }); },
     };
   }
-  const nodes = Object.fromEntries(['task-form', 'task-input', 'task-list', 'task-count', 'status-message']
+  const nodes = Object.fromEntries(['task-form', 'task-input', 'task-list', 'task-count', 'status-message', 'export-btn', 'import-btn', 'import-file-input']
     .map(id => [id, element()]));
   nodes['task-form'].reset = () => { nodes['task-input'].value = ''; };
   initTaskApp({ querySelector: selector => nodes[selector.slice(1)], createElement: element }, storage);
@@ -181,4 +184,110 @@ test('una entrada válida deja de anunciarse inválida aunque falle el guardado'
   assert.equal(nodes['task-input'].attributes['aria-invalid'], undefined);
   assert.equal(nodes['task-input'].value, 'Válida');
   assert.match(nodes['status-message'].textContent, /No se pudo guardar/);
+});
+
+test('exportar e importar conserva texto Unicode, identificadores y estado', () => {
+  const source = memoryStorage();
+  const tasks = [createTask('Comprar café ☕'), { ...createTask('<b>Leer</b>'), completed: true }];
+  saveTasks(tasks, source);
+  const json = exportTasks(source);
+  assert.equal(JSON.parse(json).version, 1);
+  const destination = memoryStorage();
+  assert.deepEqual(importTasks(json, destination), { tasks, added: 2, skipped: 0 });
+  assert.deepEqual(loadTasks(destination), tasks);
+  assert.deepEqual(importTasks('\uFEFF' + json, destination), { tasks, added: 0, skipped: 2 });
+});
+
+test('importar agrega sin eliminar tareas existentes y exporta una lista vacía', () => {
+  const destination = memoryStorage();
+  const existing = createTask('Local');
+  saveTasks([existing], destination);
+  assert.equal(importTasks(exportTasks(memoryStorage()), destination).added, 0);
+  assert.deepEqual(loadTasks(destination), [existing]);
+  const source = memoryStorage();
+  const incoming = createTask('Importada');
+  saveTasks([incoming], source);
+  assert.deepEqual(importTasks(exportTasks(source), destination).tasks, [existing, incoming]);
+});
+
+test('rechaza respaldos inválidos sin alterar los datos locales', () => {
+  const local = createTask('Local');
+  const incoming = createTask('Importada');
+  const wrap = tasks => JSON.stringify({ format: 'mini-task', version: 1, tasks });
+  for (const json of ['{', 'null', '{}', '[]', JSON.stringify({ format: 'mini-task', version: 2, tasks: [] }),
+    wrap([incoming, incoming]), wrap([{ ...incoming, completed: 'true' }]), wrap([incoming, { ...local, text: 'Conflicto' }])]) {
+    const destination = memoryStorage();
+    saveTasks([local], destination);
+    const before = destination.getItem('mini-task.tasks');
+    assert.throws(() => importTasks(json, destination));
+    assert.equal(destination.getItem('mini-task.tasks'), before);
+  }
+});
+
+test('rechaza archivos grandes midiendo bytes UTF-8 y entradas no textuales', () => {
+  assert.throws(() => importTasks('é'.repeat(524289), memoryStorage()), /1 MiB/);
+  assert.throws(() => importTasks(null, memoryStorage()), /archivo JSON/);
+});
+
+test('exportar e importar no sobrescribe almacenamiento local corrupto', () => {
+  const destination = memoryStorage();
+  destination.setItem('mini-task.tasks', '{');
+  assert.throws(() => exportTasks(destination));
+  assert.throws(() => importTasks(exportTasks(memoryStorage()), destination));
+  assert.equal(destination.getItem('mini-task.tasks'), '{');
+});
+
+test('un fallo de escritura durante la importación se propaga sin anunciar éxito', () => {
+  const source = memoryStorage();
+  saveTasks([createTask('Importar')], source);
+  const destination = { getItem: () => null, setItem() { throw new Error('Sin espacio'); } };
+  assert.throws(() => importTasks(exportTasks(source), destination), /Sin espacio/);
+});
+
+test('la interfaz importa, actualiza el contador y permite repetir el mismo archivo', async () => {
+  const memory = memoryStorage();
+  const source = memoryStorage();
+  saveTasks([createTask('Importada')], source);
+  const json = exportTasks(source);
+  const { nodes } = app({ loadTasks: () => loadTasks(memory), importTasks: text => importTasks(text, memory) });
+  const file = nodes['import-file-input'];
+  file.files = [{ size: json.length, text: async () => json }];
+  await file.dispatch('change');
+  assert.equal(nodes['task-list'].children.length, 1);
+  assert.match(nodes['task-count'].textContent, /1 tarea/);
+  assert.match(nodes['status-message'].textContent, /1 tareas nuevas/);
+  assert.equal(file.value, '');
+  assert.equal(nodes['import-btn'].focused, true);
+  await file.dispatch('change');
+  assert.equal(nodes['task-list'].children.length, 1);
+  assert.match(nodes['status-message'].textContent, /1 duplicadas omitidas/);
+});
+
+test('la interfaz rechaza archivos grandes antes de leerlos y restaura controles', async () => {
+  const { nodes } = app({ loadTasks: () => [] });
+  nodes['import-file-input'].files = [{ size: 1024 * 1024 + 1, text() { assert.fail('No debe leer'); } }];
+  await nodes['import-file-input'].dispatch('change');
+  assert.match(nodes['status-message'].textContent, /supera el límite/);
+  assert.equal(nodes['import-btn'].disabled, false);
+  assert.equal(nodes['export-btn'].disabled, false);
+  assert.equal(nodes['import-file-input'].disabled, false);
+});
+
+test('un archivo ilegible no cambia la lista y una segunda importación no se solapa', async () => {
+  const { nodes } = app({ loadTasks: () => [createTask('Existente')] });
+  let rejectRead;
+  let reads = 0;
+  nodes['import-file-input'].files = [{ size: 1, text() {
+    reads++;
+    return new Promise((resolve, reject) => { rejectRead = reject; });
+  } }];
+  const first = nodes['import-file-input'].dispatch('change');
+  assert.equal(nodes['import-btn'].disabled, true);
+  await nodes['import-file-input'].dispatch('change');
+  assert.equal(reads, 1);
+  rejectRead(new Error('Archivo ilegible'));
+  await first;
+  assert.equal(nodes['task-list'].children.length, 1);
+  assert.match(nodes['status-message'].textContent, /Archivo ilegible/);
+  assert.equal(nodes['import-btn'].disabled, false);
 });
