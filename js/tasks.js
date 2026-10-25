@@ -24,14 +24,10 @@ function initTaskApp(document, storage = typeof module !== 'undefined' && module
 
   function updateCount() {
     const pending = tasks.filter(task => !task.completed).length;
-    count.textContent = `${tasks.length} ${tasks.length === 1 ? 'tarea' : 'tareas'} · ${pending} pendientes`;
+    count.textContent = `${tasks.length} ${tasks.length === 1 ? 'tarea' : 'tareas'} · ${pending} ${pending === 1 ? 'pendiente' : 'pendientes'}`;
   }
 
   function commit(nextTasks) {
-    if (!storageReady) {
-      message('No se pudieron recuperar tus tareas. Revisá el almacenamiento del navegador y recargá la página. No se sobrescribieron los datos.', true);
-      return false;
-    }
     try {
       storage.saveTasks(nextTasks);
       tasks = nextTasks;
@@ -80,13 +76,20 @@ function initTaskApp(document, storage = typeof module !== 'undefined' && module
     list.append(item);
   }
 
-  try {
-    tasks = storage.loadTasks();
-    storageReady = true;
-    tasks.forEach(appendTask);
-  } catch {
-    message('No se pudieron recuperar tus tareas. Revisá el almacenamiento del navegador y recargá la página. No se sobrescribieron los datos.', true);
+  function recoverTasks() {
+    try {
+      tasks = storage.loadTasks();
+      storageReady = true;
+      tasks.forEach(appendTask);
+      updateCount();
+      return true;
+    } catch {
+      message('No se pudieron recuperar tus tareas. No se sobrescribieron los datos. Revisá los permisos del navegador; si los datos están dañados, conservá una copia antes de repararlos. Luego intentá agregar la tarea nuevamente.', true);
+      return false;
+    }
   }
+
+  recoverTasks();
   updateCount();
 
   form.addEventListener('submit', (event) => {
@@ -100,10 +103,11 @@ function initTaskApp(document, storage = typeof module !== 'undefined' && module
       input.focus();
       return;
     }
+    input.removeAttribute('aria-invalid');
+    if (!storageReady && !recoverTasks()) return;
     if (!commit([...tasks, task])) return;
     appendTask(task);
     message('Tarea agregada.');
-    input.removeAttribute('aria-invalid');
     form.reset();
     input.focus();
   });

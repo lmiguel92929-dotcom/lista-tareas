@@ -147,3 +147,38 @@ test('un fallo al recuperar datos impide sobrescribir el almacenamiento', () => 
   assert.equal(writes, 0);
   assert.equal(nodes['task-list'].children.length, 0);
 });
+
+test('reintenta una lectura fallida y conserva las tareas recuperadas al agregar', () => {
+  const existing = createTask('Recuperada');
+  let readable = false;
+  let saved;
+  const { nodes, submit } = app({
+    loadTasks() {
+      if (!readable) throw new Error('Lectura bloqueada');
+      return [existing];
+    },
+    saveTasks(tasks) { saved = tasks; },
+  });
+  submit('Nueva');
+  assert.equal(saved, undefined);
+  readable = true;
+  submit('Nueva');
+  assert.equal(saved.length, 2);
+  assert.deepEqual(saved[0], existing);
+  assert.equal(nodes['task-list'].children.length, 2);
+  submit('Otra');
+  assert.equal(nodes['task-list'].children.length, 3);
+});
+
+test('una entrada válida deja de anunciarse inválida aunque falle el guardado', () => {
+  const { nodes, submit } = app({
+    loadTasks: () => [],
+    saveTasks() { throw new Error('Sin espacio'); },
+  });
+  submit('');
+  assert.equal(nodes['task-input'].attributes['aria-invalid'], 'true');
+  submit('Válida');
+  assert.equal(nodes['task-input'].attributes['aria-invalid'], undefined);
+  assert.equal(nodes['task-input'].value, 'Válida');
+  assert.match(nodes['status-message'].textContent, /No se pudo guardar/);
+});
